@@ -1,1 +1,187 @@
+import pandas as pd
+import numpy as np
+import seaborn as sns
+import matplotlib.pyplot as plt
+import pickle
+import joblib
+from sklearn.model_selection import train_test_split, GridSearchCV, cross_val_score
+from sklearn.preprocessing import LabelEncoder, StandardScaler
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import StratifiedKFold
+from sklearn.metrics import classification_report, accuracy_score, confusion_matrix
+from imblearn.over_sampling import SMOTE
 
+
+# Function to load and preprocess data
+def load_and_preprocess_data(filename):
+    df = pd.read_csv(filename)
+    df.dropna(inplace=True)  # Remove missing values
+
+    df['password_length'] = df['password'].apply(len)
+    df['n_uppercase'] = df['password'].str.count(r'[A-Z]')
+    df['n_lowercase'] = df['password'].str.count(r'[a-z]')
+    df['n_digits'] = df['password'].str.count(r'[0-9]')
+    df['n_special'] = df['password'].str.count(r'[^A-Za-z0-9]')
+    df['has_uppercase'] = (df['n_uppercase'] > 0).astype(int)
+    df['has_lowercase'] = (df['n_lowercase'] > 0).astype(int)
+    df['has_digits'] = (df['n_digits'] > 0).astype(int)
+    df['has_special'] = (df['n_special'] > 0).astype(int)    
+    df['n_unique'] = df['password'].apply(lambda x: len(set(x)))
+
+    # Encode strength labels
+    label_encoder = LabelEncoder()
+    df['strength'] = label_encoder.fit_transform(df['strength'])
+    
+    return df
+
+# Function to split dataset into training and testing sets
+def split_data(df):
+    X = df[['password_length', 'n_uppercase', 'n_lowercase', 'n_digits', 'n_special', 'has_uppercase', 'has_lowercase', 'has_digits', 'has_special', 'n_unique']]  # Features
+    
+    y = df['strength']  # Target variable
+    return train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
+
+# Function to scale features (important for Logistic Regression)
+def scale_features(X_train, X_test):
+    scaler = StandardScaler()
+    X_train_scaled = scaler.fit_transform(X_train)
+    X_test_scaled = scaler.transform(X_test)
+    
+    # Save the scaler for later use
+    joblib.dump(scaler, "scaler.pkl")
+    
+    return X_train_scaled, X_test_scaled
+
+# Function to train a Logistic Regression model
+def train_logistic_regression(X_train, y_train):
+    model = LogisticRegression(max_iter=500)
+    model.fit(X_train, y_train)
+    
+    # Save the trained model
+    with open("logistic_regression_model.pkl", "wb") as file:
+        pickle.dump(model, file)
+    
+    return model
+
+# Function to evaluate model performance
+def evaluate_model(model, X_test, y_test, title="Evaluation Results", save_fig=False):
+    y_pred = model.predict(X_test)
+    accuracy = accuracy_score(y_test, y_pred)
+    
+    print(f"\n{title}")
+    print("Accuracy:", accuracy)
+    print("Classification Report:\n", classification_report(y_test, y_pred))
+
+    # Confusion Matrix Plot
+    plt.figure(figsize=(6,5))
+    sns.heatmap(confusion_matrix(y_test, y_pred), annot=True, cmap="Blues", fmt="d")
+    plt.xlabel('Predicted')
+    plt.ylabel('Actual')
+    plt.title(f'Confusion Matrix - {title}')
+    
+    if save_fig:
+        plt.savefig(f"{title.replace(' ', '_')}.png")  # Save confusion matrix figure
+    
+    plt.show()
+
+# Function to balance data using SMOTE
+def balance_data(X_train, y_train):
+    smote = SMOTE(random_state=42)
+    X_resampled, y_resampled = smote.fit_resample(X_train, y_train)
+    
+    # Save resampled data for reference
+    np.save("X_resampled.npy", X_resampled)
+    np.save("y_resampled.npy", y_resampled)
+    
+    return X_resampled, y_resampled
+
+# Function to perform hyperparameter tuning (GridSearchCV)
+def tune_hyperparameters(X_train, y_train):
+    param_grid = {
+        "C": [0.01, 0.1, 1, 10, 100],
+        "penalty": ["l1", "l2"],
+        "solver": ["liblinear"]
+    }
+    
+    grid_search = GridSearchCV(LogisticRegression(max_iter=500), param_grid, cv=5, scoring="accuracy")
+    grid_search.fit(X_train, y_train)
+
+    print("Best Parameters:", grid_search.best_params_)
+
+    # Save the best model
+    joblib.dump(grid_search.best_estimator_, "best_logistic_regression.pkl")
+    
+    return grid_search.best_estimator_
+
+# Function to perform cross-validation
+def perform_cross_validation(X, y, model, n_splits=5):
+    """Perform cross-validation and return detailed metrics"""
+    cv = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=42)
+    
+    accuracy_scores = cross_val_score(model, X, y, cv=cv, scoring='accuracy')
+    precision_scores = cross_val_score(model, X, y, cv=cv, scoring='precision_weighted')
+    recall_scores = cross_val_score(model, X, y, cv=cv, scoring='recall_weighted')
+    f1_scores = cross_val_score(model, X, y, cv=cv, scoring='f1_weighted')
+    
+    cv_results = {
+        'Accuracy': {
+            'Mean': accuracy_scores.mean(),
+            'Std': accuracy_scores.std(),
+            'Scores': accuracy_scores
+        },
+        'Precision': {
+            'Mean': precision_scores.mean(),
+            'Std': precision_scores.std(),
+            'Scores': precision_scores
+        },
+        'Recall': {
+            'Mean': recall_scores.mean(),
+            'Std': recall_scores.std(),
+            'Scores': recall_scores
+        },
+        'F1': {
+            'Mean': f1_scores.mean(),
+            'Std': f1_scores.std(),
+            'Scores': f1_scores
+        }
+    }
+    
+    return cv_results
+
+
+
+# Main function
+def main():
+    # Load and preprocess data
+    df = load_and_preprocess_data("D:\OneDrive\Desktop\ML Research@Dr. Rahimi\Model 2. Logistic Regression\dataset_reformed_combined.csv")
+
+    # Split data into training and testing sets
+    X_train, X_test, y_train, y_test = split_data(df)
+
+    # Scale features
+    X_train_scaled, X_test_scaled = scale_features(X_train, X_test)
+
+    # Train and evaluate model on imbalanced data
+    model = train_logistic_regression(X_train_scaled, y_train)
+    evaluate_model(model, X_test_scaled, y_test, "Logistic Regression on Imbalanced Data", save_fig=True)
+
+    # Balance data using SMOTE
+    X_resampled, y_resampled = balance_data(X_train_scaled, y_train)
+
+    # Train and evaluate model on balanced data
+    model_smote = train_logistic_regression(X_resampled, y_resampled)
+    evaluate_model(model_smote, X_test_scaled, y_test, "Logistic Regression on Balanced Data (SMOTE)", save_fig=True)
+
+    # Perform hyperparameter tuning
+    best_model = tune_hyperparameters(X_resampled, y_resampled)
+    evaluate_model(best_model, X_test_scaled, y_test, "Logistic Regression with Hyperparameter Tuning", save_fig=True)
+
+    # Perform cross-validation on balanced data
+    cv_results = perform_cross_validation(X_resampled, y_resampled, best_model, n_splits=5)
+    print("\nCross-Validation Results:")
+    for metric, values in cv_results.items():
+        print(f"{metric}: Mean={values['Mean']:.4f}, Std={values['Std']:.4f}, Scores={values['Scores']}")
+
+# Run the script
+if __name__ == "__main__":
+    main()
