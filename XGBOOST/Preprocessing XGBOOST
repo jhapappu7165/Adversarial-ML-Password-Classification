@@ -1,0 +1,34 @@
+import numpy as np
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+from sklearn.preprocessing import StandardScaler
+dataset = pd.read_csv("/content/dataset.csv")
+dataset.head()
+
+dataset["class_strength"].value_counts()
+
+dataset["class_strength"] = dataset["class_strength"].str.replace("week","weak",case=True)
+dataset["class_strength"] = dataset["class_strength"].str.replace("weak","Weak",case=True)
+dataset["class_strength"] = dataset["class_strength"].str.replace("Very Weak","Very weak",case=True)
+dataset.head()
+
+dataset.sort_values(by="strength",ascending=False)
+dataset.drop_duplicates(inplace=True)
+dataset.duplicated().sum()
+
+dataset.head(10)
+dataset[dataset["password"].isna()]
+
+dataset["crack_time_sec"].sort_values(ascending=False)
+
+dataset.replace([np.inf, -np.inf], np.nan, inplace=True)
+dataset.dropna(subset=['crack_time_sec', 'strength', 'entropy'], inplace=True)
+print(dataset[['crack_time_sec', 'strength', 'entropy']].describe())
+
+
+actual_data=dataset.drop(["password","class_strength","crack_time"], axis=1)
+scaler = StandardScaler()
+scaled_data = scaler.fit_transform(actual_data)
+scaled_data_df = pd.DataFrame(scaled_data, columns=actual_data.columns)
+scaled_data_df.head()
