@@ -1,0 +1,425 @@
+# Import necessary libraries
+import pandas as pd
+import numpy as np
+from sklearn.model_selection import train_test_split, cross_val_score, StratifiedKFold
+from sklearn.preprocessing import LabelEncoder
+from sklearn.pipeline import Pipeline
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import classification_report, confusion_matrix, roc_curve, auc
+import seaborn as sns
+import matplotlib.pyplot as plt
+import os
+from datetime import datetime
+from imblearn.over_sampling import SMOTE
+import joblib
+import warnings
+warnings.filterwarnings('ignore')
+
+
+# Create results directory for both balanced and imbalanced results
+base_results_dir = "model_results"
+imbalanced_dir = os.path.join(base_results_dir, "imbalanced")
+balanced_dir = os.path.join(base_results_dir, "balanced")
+
+
+# Ensure directories exist before programs are saved
+for directory in [imbalanced_dir, balanced_dir]:
+    if not os.path.exists(directory):
+        os.makedirs(directory) #If the directory doesn't exist, it creates it (and any necessary parent directories) 
+
+
+# Define strength labels mapping
+strength_labels = {
+    0: "Weak",
+    1: "Medium",
+    2: "Strong"
+}
+
+
+
+#create a dataframe (table) and insert each one of the features in each column
+def extract_password_features(passwords):
+    features = pd.DataFrame() #name of dataframe
+    features['length'] = passwords.str.len()
+    features['n_uppercase'] = passwords.str.count(r'[A-Z]')
+    features['n_lowercase'] = passwords.str.count(r'[a-z]')
+    features['n_digits'] = passwords.str.count(r'[0-9]')
+    features['n_special'] = passwords.str.count(r'[^A-Za-z0-9]')
+    features['has_uppercase'] = features['n_uppercase'] > 0
+    features['has_lowercase'] = features['n_lowercase'] > 0
+    features['has_digits'] = features['n_digits'] > 0 #True if there is at least one digit
+    features['has_special'] = features['n_special'] > 0 #True if there is at least one special character
+    features['n_unique'] = passwords.apply(lambda x: len(set(x))) #number of unique characters in the password
+    return features  
+
+
+def plot_distribution(y, title, save_path):
+    plt.figure(figsize=(10, 6))
+    strength_counts = pd.Series(y).map(strength_labels).value_counts() #maps y(0,1,2) to strength_labels(Weak, Medium, Strong); count each category
+    sns.barplot(x=strength_counts.index, y=strength_counts.values) #x:strength category labels; y: count of passwords in each category
+    plt.title(title)
+    plt.xlabel('Strength Category')
+    plt.ylabel('Number of Passwords')
+    plt.savefig(save_path)
+    plt.close()
+    return strength_counts #Returns the counts of each strength category as a pandas SERIES
+
+
+
+def create_comparative_visualizations(imbalanced_model, balanced_model, X_test, y_test, results_dir):
+    """Create comparative visualizations between imbalanced and balanced models"""
+
+    #ROC Curve (Receiver Operating Characteristic) shows trade-off between True Positive Rate & the False Positive Rate for different thresholds
+    #AUC (Area Under the Curve) measures the overall performance: a higher AUC means better discrimination between classes
+
+    # 1. ROC Curves Comparison
+    plt.figure(figsize=(15, 5)) #Creates a new figure for plotting with a size of 15x5 inches, suitable for two side-by-side plots.
+
+    # Plot for imbalanced model
+    plt.subplot(1, 2, 1) #1 row, 2 colns, 1 is the index of the current SUBPLOT within the grid
+
+    for i in range(3): #Loop over the 3 classes (weak, medium, strong)
+        y_score = imbalanced_model.predict_proba(X_test)[:, i] #probability of predicting each class (i);[:,i] select probability for 'i'th class
+        fpr, tpr, _ = roc_curve(y_test == i, y_score) #y_test == i creates a binary label: True for instances belonging to class i
+        plt.plot(fpr, tpr, label=f'{strength_labels[i]} (AUC = {auc(fpr, tpr):.2f})') #fpr: false positive rate
+        #auc(fpr, tpr) computes the Area Under the Curve; plot ROC curve for class i;strength_labels[i] is class label (strong, medium, weak)
+
+
+    plt.plot([0, 1], [0, 1], 'k--') #Adds a dashed diagonal line to represent random guessing (AUC = 0.5).
+
+    plt.title('ROC Curves (Imbalanced Model)')
+    plt.xlabel('False Positive Rate')
+    plt.ylabel('True Positive Rate')
+    plt.legend()
+
+
+    # Plot for balanced model
+    plt.subplot(1, 2, 2)
+
+    for i in range(3):
+        y_score = balanced_model.predict_proba(X_test)[:, i] #For each sample, probability of being predicted of each class (i)
+        fpr, tpr, _ = roc_curve(y_test == i, y_score) #y_test=i results True y_test is of class i; output TPR, FPR, _(threshold)
+        plt.plot(fpr, tpr, label=f'{strength_labels[i]} (AUC = {auc(fpr, tpr):.2f})')
+
+    plt.plot([0, 1], [0, 1], 'k--') #[0,1]:plot from y=0 to y=1 for the corresponding x-values, 'k':black, '--':dashed line
+    #Plot a dashed black line starting at the point (0, 0) on the graph and ending at the point (1, 1) on the graph
+    plt.title('ROC Curves (Balanced Model)')
+    plt.xlabel('False Positive Rate')
+    plt.ylabel('True Positive Rate')
+    plt.legend()
+    
+    plt.tight_layout()
+    plt.savefig(f'{results_dir}/roc_curves_comparison.png')
+    plt.close()
+
+
+
+    # 2. Feature Importance Comparison
+    plt.figure(figsize=(15, 6))
+
+    # Get feature importances:Higher the importance score of a feature, more important it is in predicting target variable; sum of all feature importances equals 1; values range from 0 to 1.
+
+    imb_importance = pd.DataFrame({ #result: A dataframe with 3 columns (feature, importance, model)
+        'feature': X_test.columns, #names of ALL features (columns)
+        'importance': imbalanced_model.named_steps['classifier'].feature_importances_, #calculate feature importance score from model
+        'model': 'Imbalanced' #label that it's Imbalanced
+    }) 
+    bal_importance = pd.DataFrame({
+        'feature': X_test.columns,
+        'importance': balanced_model.named_steps['classifier'].feature_importances_,
+        'model': 'Balanced'
+    })
+
+
+
+    # Combine and plot
+    feature_importance = pd.concat([imb_importance, bal_importance])
+    sns.barplot(data=feature_importance, x='feature', y='importance', hue='model') #hue='model' adds color coding to the bars
+    plt.xticks(rotation=45)
+    plt.title('Feature Importance Comparison')
+    plt.tight_layout() #adjusts layout of the plot automatically to ensure that elements don't overlap
+    plt.savefig(f'{results_dir}/feature_importance_comparison.png')
+    plt.close()
+
+
+
+def test_custom_passwords(model, passwords):
+
+    """Test the model with custom passwords""" #docstrings in Python to provide documentation for functions, classes, or modules
+    # Extract features from custom passwords
+    features = extract_password_features(pd.Series(passwords))
+
+    # Make predictions
+    predictions = model.predict(features) #uses the model to predict the class label for the given input data (features).
+    probabilities = model.predict_proba(features) #returns an array where each column corresponds to the probability that it belongs to each class
+    
+    # Create results DataFrame
+    results = pd.DataFrame({
+        'Password': passwords,
+        'Predicted Strength': [strength_labels[p] for p in predictions],
+        'Confidence': [max(prob) * 100 for prob in probabilities]
+    })
+    
+    # Add probability columns for each class
+    for i, strength in strength_labels.items():
+        results[f'{strength} Probability'] = probabilities[:, i] * 100
+    
+    return results
+
+
+def perform_cross_validation(X, y, model, n_splits=5): #dataset will be divided into 5 equal parts for cross-validation
+    """Perform cross-validation and return detailed metrics"""
+    cv = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=42) #random_state: get the same split every time you run the code
+    
+    # Metrics to collect (Here, 5 fold of data, so 5 accuracy, precision, recall, f1 scores)
+    accuracy_scores = cross_val_score(model, X, y, cv=cv, scoring='accuracy') #cv=cv: cross-validation strategy (StratifiedKFold) 
+    precision_scores = cross_val_score(model, X, y, cv=cv, scoring='precision_weighted')
+    recall_scores = cross_val_score(model, X, y, cv=cv, scoring='recall_weighted')
+    f1_scores = cross_val_score(model, X, y, cv=cv, scoring='f1_weighted')
+    
+    # Create results dictionary
+    cv_results = {
+        'Accuracy': {
+            'Mean': accuracy_scores.mean(),
+            'Std': accuracy_scores.std(),
+            'Scores': accuracy_scores
+        },
+        'Precision': {
+            'Mean': precision_scores.mean(),
+            'Std': precision_scores.std(),
+            'Scores': precision_scores
+        },
+        'Recall': {
+            'Mean': recall_scores.mean(),
+            'Std': recall_scores.std(),
+            'Scores': recall_scores
+        },
+        'F1': {
+            'Mean': f1_scores.mean(),
+            'Std': f1_scores.std(),
+            'Scores': f1_scores
+        }
+    }
+    
+    return cv_results
+
+def evaluate_and_save_results(X, y, results_dir, dataset_name):
+    # Train-test split
+    X_train, X_test, y_train, y_test = train_test_split(X, y, 
+                                                        test_size=0.2, 
+                                                        random_state=42,
+                                                        stratify=y)
+    
+    # Create and train model
+    clf_pipeline = Pipeline([
+        ('classifier', RandomForestClassifier(n_estimators=100, 
+                                            random_state=42,
+                                            n_jobs=-1,
+                                            max_depth=10))
+    ])
+
+    print(f"\nTraining {dataset_name} model...")
+    clf_pipeline.fit(X_train, y_train)
+
+    # Make predictions
+    y_pred = clf_pipeline.predict(X_test)
+    y_pred_proba = clf_pipeline.predict_proba(X_test) #Predict probabilities of each class for the test data (X_test)- generate ROC curves
+
+    # Classification Report
+    report = classification_report(y_test, y_pred, 
+                                 target_names=[strength_labels[i] for i in range(3)],
+                                 output_dict=True) #output_dict=True returns classification report as a dictionary for easier manipulation 
+
+    print(f"\n{dataset_name} Classification Report:")
+    print(classification_report(y_test, y_pred, 
+                              target_names=[strength_labels[i] for i in range(3)]))
+
+    # Save classification report
+    report_df = pd.DataFrame(report).transpose()
+    report_df.to_csv(f'{results_dir}/classification_report.csv')
+
+    # Confusion Matrix
+    plt.figure(figsize=(10, 8))
+    cm = confusion_matrix(y_test, y_pred)
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
+                xticklabels=[strength_labels[i] for i in range(3)],
+                yticklabels=[strength_labels[i] for i in range(3)])
+    plt.title(f'{dataset_name} Password Strength Confusion Matrix')
+    plt.ylabel('True Label')
+    plt.xlabel('Predicted Label')
+    plt.savefig(f'{results_dir}/confusion_matrix.png')
+    plt.close()
+
+    # ROC Curves
+    plt.figure(figsize=(10, 8))
+    for i in range(3):
+        fpr, tpr, _ = roc_curve(y_test == i, y_pred_proba[:, i])
+        roc_auc = auc(fpr, tpr)
+        plt.plot(fpr, tpr, label=f'{strength_labels[i]} (AUC = {roc_auc:.2f})')
+
+    plt.plot([0, 1], [0, 1], 'k--')
+    plt.xlim([0.0, 1.0])
+    plt.ylim([0.0, 1.05])
+    plt.xlabel('False Positive Rate')
+    plt.ylabel('True Positive Rate')
+    plt.title(f'{dataset_name} ROC Curves')
+    plt.legend(loc="lower right")
+    plt.savefig(f'{results_dir}/roc_curves.png')
+    plt.close()
+
+    return clf_pipeline, report, X_test, y_test
+
+# Main execution
+if __name__ == "__main__":
+    # Read and prepare data
+    print("Loading and preparing data...")
+    df = pd.read_csv(r'D:\OneDrive\Desktop\ML Research@Dr. Rahimi\Model 1. Random Forest\pappu_jha\new_file_combined.csv')
+    X = extract_password_features(df['password'])
+    y = df['strength']
+
+    # Plot original distribution
+    strength_counts = plot_distribution(y, 'Original Data Distribution', 
+                     f'{imbalanced_dir}/original_distribution.png')
+
+    # Evaluate imbalanced data
+    imbalanced_model, imbalanced_report, X_test, y_test = evaluate_and_save_results(
+        X, y, imbalanced_dir, "Imbalanced")
+
+    # Balance data using SMOTE
+    print("\nBalancing data using SMOTE...")
+    smote = SMOTE(random_state=42)
+    X_balanced, y_balanced = smote.fit_resample(X, y)
+
+    # Plot balanced distribution
+    plot_distribution(y_balanced, 'Balanced Data Distribution', 
+                     f'{balanced_dir}/balanced_distribution.png')
+
+    # Evaluate balanced data
+    balanced_model, balanced_report, X_test_bal, y_test_bal = evaluate_and_save_results(
+        X_balanced, y_balanced, balanced_dir, "Balanced")
+
+    # Perform cross-validation
+    print("\nPerforming cross-validation...")
+    imb_cv_results = perform_cross_validation(X, y, imbalanced_model)
+    bal_cv_results = perform_cross_validation(X_balanced, y_balanced, balanced_model)
+
+
+    # Save cross-validation results
+    cv_comparison = pd.DataFrame({
+        'Metric': ['Accuracy', 'Precision', 'Recall', 'F1'],
+        'Imbalanced (Mean ± Std)': [
+            f"{imb_cv_results['Accuracy']['Mean']:.3f} ± {imb_cv_results['Accuracy']['Std']:.3f}",
+            f"{imb_cv_results['Precision']['Mean']:.3f} ± {imb_cv_results['Precision']['Std']:.3f}",
+            f"{imb_cv_results['Recall']['Mean']:.3f} ± {imb_cv_results['Recall']['Std']:.3f}",
+            f"{imb_cv_results['F1']['Mean']:.3f} ± {imb_cv_results['F1']['Std']:.3f}"
+        ],
+        'Balanced (Mean ± Std)': [
+            f"{bal_cv_results['Accuracy']['Mean']:.3f} ± {bal_cv_results['Accuracy']['Std']:.3f}",
+            f"{bal_cv_results['Precision']['Mean']:.3f} ± {bal_cv_results['Precision']['Std']:.3f}",
+            f"{bal_cv_results['Recall']['Mean']:.3f} ± {bal_cv_results['Recall']['Std']:.3f}",
+            f"{bal_cv_results['F1']['Mean']:.3f} ± {bal_cv_results['F1']['Std']:.3f}"
+        ]
+    })
+    cv_comparison.to_csv(f'{base_results_dir}/cross_validation_comparison.csv')
+
+    # Create comparative visualizations
+    create_comparative_visualizations(imbalanced_model, balanced_model, X_test, y_test, base_results_dir)
+
+    # Test with some example passwords
+    test_passwords = [
+        "password123",
+        "P@ssw0rd!",
+        "abc123",
+        "SuperSecure2024!",
+        "qwerty",
+        "Complex!P@ssw0rd2024"
+    ]
+
+
+    print("\nTesting custom passwords...")
+    imb_test_results = test_custom_passwords(imbalanced_model, test_passwords)
+    bal_test_results = test_custom_passwords(balanced_model, test_passwords)
+
+    # Save test results
+    imb_test_results.to_csv(f'{imbalanced_dir}/custom_password_results.csv')
+    bal_test_results.to_csv(f'{balanced_dir}/custom_password_results.csv')
+
+    print("\nExample password predictions (Imbalanced Model):")
+    print(imb_test_results[['Password', 'Predicted Strength', 'Confidence']])
+
+    print("\nExample password predictions (Balanced Model):")
+    print(bal_test_results[['Password', 'Predicted Strength', 'Confidence']])
+
+    # Save models
+    joblib.dump(imbalanced_model, f'{imbalanced_dir}/model.joblib')
+    joblib.dump(balanced_model, f'{balanced_dir}/model.joblib')
+
+
+
+def save_comparison_results(imbalanced_report, balanced_report, cv_comparison, base_results_dir):
+    """Save comparison results in both CSV and TXT formats"""
+
+    # Create comparison DataFrame
+    comparison_df = pd.DataFrame({
+        'Metric': ['Accuracy', 'Macro Avg F1-score', 'Weighted Avg F1-score'],
+        'Imbalanced': [
+            imbalanced_report['accuracy'],
+            imbalanced_report['macro avg']['f1-score'],
+            imbalanced_report['weighted avg']['f1-score']
+        ],
+        'Balanced': [
+            balanced_report['accuracy'],
+            balanced_report['macro avg']['f1-score'],
+            balanced_report['weighted avg']['f1-score']
+        ]
+    })
+
+    # Save as CSV
+    comparison_df.to_csv(f'{base_results_dir}/model_comparison.csv')
+
+    # Save as TXT with formatted output
+    with open(f'{base_results_dir}/model_comparison.txt', 'w') as f:
+        f.write("Password Strength Classification Model Comparison\n")
+        f.write(f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+        f.write("\n" + "="*50 + "\n\n")
+
+        # Model Performance Metrics
+        f.write("MODEL PERFORMANCE METRICS\n")
+        f.write("-"*25 + "\n\n")
+        for idx, metric in enumerate(comparison_df['Metric']):
+            f.write(f"{metric}:\n")
+            f.write(f"  Imbalanced: {comparison_df['Imbalanced'][idx]:.4f}\n")
+            f.write(f"  Balanced:   {comparison_df['Balanced'][idx]:.4f}\n\n")
+
+        # Cross-Validation Results
+        f.write("\nCROSS-VALIDATION RESULTS\n")
+        f.write("-"*25 + "\n\n")
+        for metric in ['Accuracy', 'Precision', 'Recall', 'F1']:
+            f.write(f"{metric}:\n")
+            f.write(f"  Imbalanced: {cv_comparison.loc[cv_comparison['Metric'] == metric, 'Imbalanced (Mean ± Std)'].values[0]}\n")
+            f.write(f"  Balanced:   {cv_comparison.loc[cv_comparison['Metric'] == metric, 'Balanced (Mean ± Std)'].values[0]}\n\n")
+        
+        # Class-wise Performance
+        f.write("\nCLASS-WISE PERFORMANCE\n")
+        f.write("-"*25 + "\n\n")
+        for strength in ['Weak', 'Medium', 'Strong']:
+            f.write(f"{strength} Passwords:\n")
+            f.write("  Imbalanced Model:\n")
+            f.write(f"    Precision: {imbalanced_report[strength]['precision']:.4f}\n")
+            f.write(f"    Recall:    {imbalanced_report[strength]['recall']:.4f}\n")
+            f.write(f"    F1-Score:  {imbalanced_report[strength]['f1-score']:.4f}\n")
+            f.write("  Balanced Model:\n")
+            f.write(f"    Precision: {balanced_report[strength]['precision']:.4f}\n")
+            f.write(f"    Recall:    {balanced_report[strength]['recall']:.4f}\n")
+            f.write(f"    F1-Score:  {balanced_report[strength]['f1-score']:.4f}\n\n")
+
+
+# In the main execution section, replace the comparison saving code with:
+save_comparison_results(imbalanced_report, balanced_report, cv_comparison, base_results_dir)
+
+print("\nAnalysis complete! Results saved in:")
+print(f"- Imbalanced data results: {imbalanced_dir}")
+print(f"- Balanced data results: {balanced_dir}")
+print(f"- Comparison reports:")
+print(f"  * CSV: {base_results_dir}/model_comparison.csv")
+print(f"  * TXT: {base_results_dir}/model_comparison.txt")
