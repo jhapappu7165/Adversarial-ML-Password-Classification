@@ -1,0 +1,97 @@
+PS D:\OneDrive\Desktop\ML Research@Dr. Rahimi\Model 3. Naive Bayes> & "D:/OneDrive/Desktop/ML Research@Dr. Rahimi/Model 3. Naive Bayes/venv/Scripts/python.exe" "d:/OneDrive/Desktop/ML Research@Dr. Rahimi/Model 3. Naive Bayes/ML_Naive_Bayes(Final).py"
+
+ Loading and preprocessing dataset
+
+ Splitting data into training and testing sets
+
+ Scaling features
+
+ Training and evaluating the model on IMBALANCED dataset
+
+Confusion Matrix of Imbalanced Data
+Accuracy: 0.9706761643726589
+Classification Report:
+               precision    recall  f1-score   support
+
+           0       0.97      0.96      0.96     26932
+           1       0.99      0.97      0.98    149137
+           2       0.88      0.96      0.92     24962
+
+    accuracy                           0.97    201031
+   macro avg       0.94      0.97      0.95    201031
+weighted avg       0.97      0.97      0.97    201031
+
+
+ Feature Importance Analysis
+   password_length  n_uppercase  n_lowercase  n_digits  n_special  n_unique
+0        -1.227863    -0.311813    -0.543980 -0.701041  -0.000697 -1.077733
+1        -0.124778    -0.311491     0.041594  0.132667   0.005726 -0.132900
+2         2.070185     2.197383     0.338386 -0.036272  -0.033457  1.956736
+
+ Plot learning curve on imbalanced model
+
+ Performing cross-validation on imbalanced data
+Accuracy: Mean=0.9700, ' ', Std=0.0005, ' ', Scores=[0.96979161 0.97015403 0.9706014  0.96913041 0.97014305]
+Precision: Mean=0.9714, ' ', Std=0.0004, ' ', Scores=[0.97132363 0.97155784 0.97187371 0.97074696 0.97151121]
+Recall: Mean=0.9700, ' ', Std=0.0005, ' ', Scores=[0.96979161 0.97015403 0.9706014  0.96913041 0.97014305]
+F1: Mean=0.9704, ' ', Std=0.0005, ' ', Scores=[0.97021585 0.9705483  0.97096152 0.96957315 0.97052583]
+
+ SAVING imbalanced model
+
+ Custome PASSWORDS Test using IMBALANCED model
+           password Predicted Strength
+0      P@ssw0rd123!             Medium
+1         123456Aa!             Medium
+2  1111111111AAA!!!             Medium
+3        O0OoOo0O0O             Strong
+4     passsssssssss             Medium
+5   Welcome2MySite!             Medium
+6              aB3!             Medium
+7                 a               Weak
+Original class distribution:
+ strength
+1    347986
+0     62840
+2     58246
+Name: count, dtype: int64
+Computing class weights
+Balanced class distribution:
+ {np.int64(0): np.float64(2.4881816252917464), np.int64(1): np.float64(0.44932075811479005), np.int64(2): np.float64(2.6844304043768386)}
+
+ Training and evaluating model on balanced data
+
+Confusion Matrix of Balanced Data (SMOTE)
+Accuracy: 0.9393078679407654
+Classification Report:
+               precision    recall  f1-score   support
+
+           0       0.85      0.97      0.91     26932
+           1       0.99      0.93      0.96    149137
+           2       0.79      0.97      0.87     24962
+
+    accuracy                           0.94    201031
+   macro avg       0.88      0.96      0.91    201031
+weighted avg       0.95      0.94      0.94    201031
+
+
+ Plot learning curve on balanced model
+
+ Perform cross-validation on balanced data
+Accuracy: Mean=0.9700, ' ', Std=0.0005, ' ', Scores=[0.96979161 0.97015403 0.9706014  0.96913041 0.97014305]
+Precision: Mean=0.9714, ' ', Std=0.0004, ' ', Scores=[0.97132363 0.97155784 0.97187371 0.97074696 0.97151121]
+Recall: Mean=0.9700, ' ', Std=0.0005, ' ', Scores=[0.96979161 0.97015403 0.9706014  0.96913041 0.97014305]
+F1: Mean=0.9704, ' ', Std=0.0005, ' ', Scores=[0.97021585 0.9705483  0.97096152 0.96957315 0.97052583]
+
+ SAVING balanced model
+
+ CUSTOM Passwords Test using BALANCED model
+           password Predicted Strength
+0      P@ssw0rd123!             Medium
+1         123456Aa!             Medium
+2  1111111111AAA!!!             Medium
+3        O0OoOo0O0O             Strong
+4     passsssssssss             Medium
+5   Welcome2MySite!             Medium
+6              aB3!             Medium
+7                 a               Weak
+PS D:\OneDrive\Desktop\ML Research@Dr. Rahimi\Model 3. Naive Bayes> 
