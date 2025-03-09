@@ -1,0 +1,83 @@
+import joblib
+from sklearn.model_selection import train_test_split
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import accuracy_score, precision_score, recall_score, classification_report, confusion_matrix
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+bins = [dataset['strength'].min(), 0.33, 0.66, dataset['strength'].max()]
+labels = ['Weak', 'Medium', 'Strong']
+dataset['strength_category'] = pd.cut(dataset['strength'], bins=bins, labels=labels, include_lowest=True)
+
+X = dataset[['crack_time_sec', 'length', 'entropy', 'class_strength']]
+y = dataset['strength_category']
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42, stratify=y
+)
+
+X_train, X_val, y_train, y_val = train_test_split(
+    X_train, y_train, test_size=0.25, random_state=42, stratify=y_train
+)
+
+X_train = pd.get_dummies(X_train, drop_first=True)
+X_val = pd.get_dummies(X_val, drop_first=True)
+X_test = pd.get_dummies(X_test, drop_first=True)
+
+X_val = X_val.reindex(columns=X_train.columns, fill_value=0)
+X_test = X_test.reindex(columns=X_train.columns, fill_value=0)
+
+scaler = StandardScaler()
+X_train = scaler.fit_transform(X_train)
+X_val = scaler.transform(X_val)
+X_test = scaler.transform(X_test)
+
+model_dt = DecisionTreeClassifier(random_state=42)
+model_dt.fit(X_train, y_train)
+
+y_val_pred = model_dt.predict(X_val)
+
+accuracy_val = accuracy_score(y_val, y_val_pred)
+precision_val = precision_score(y_val, y_val_pred, average='weighted')
+recall_val = recall_score(y_val, y_val_pred, average='weighted')
+
+print("Validation Set Metrics:")
+print("Accuracy:", accuracy_val)
+print("Precision:", precision_val)
+print("Recall:", recall_val)
+print("\nClassification Report:\n", classification_report(y_val, y_val_pred))
+
+conf_matrix = confusion_matrix(y_val, y_val_pred, labels=labels)
+plt.figure(figsize=(8, 6))
+sns.heatmap(conf_matrix, annot=True, fmt='d', cmap='Blues', xticklabels=labels, yticklabels=labels)
+plt.xlabel("Predicted")
+plt.ylabel("Actual")
+plt.title("Confusion Matrix - Validation Set")
+plt.show()
+
+y_test_pred = model_dt.predict(X_test)
+
+accuracy_test = accuracy_score(y_test, y_test_pred)
+precision_test = precision_score(y_test, y_test_pred, average='weighted')
+recall_test = recall_score(y_test, y_test_pred, average='weighted')
+
+print("Test Set Metrics:")
+print("Accuracy:", accuracy_test)
+print("Precision:", precision_test)
+print("Recall:", recall_test)
+print("\nClassification Report:\n", classification_report(y_test, y_test_pred))
+
+conf_matrix_test = confusion_matrix(y_test, y_test_pred, labels=labels)
+plt.figure(figsize=(8, 6))
+sns.heatmap(conf_matrix_test, annot=True, fmt='d', cmap='Greens', xticklabels=labels, yticklabels=labels)
+plt.xlabel("Predicted")
+plt.ylabel("Actual")
+plt.title("Confusion Matrix - Test Set")
+plt.show()
+
+joblib.dump(model_dt, 'decision_tree_model.pkl')
+print("Model saved successfully!")
+
+# model_dt_loaded = joblib.load('decision_tree_model.pkl')
