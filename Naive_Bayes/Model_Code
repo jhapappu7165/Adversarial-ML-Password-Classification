@@ -1,0 +1,301 @@
+# normalize confusion matrix so that diagonal will be dark 
+import pandas as pd
+import numpy as np
+import seaborn as sns
+import matplotlib.pyplot as plt
+import pickle
+import joblib
+import math
+import re
+import nltk
+from nltk.corpus import words
+from sklearn.model_selection import train_test_split, GridSearchCV, cross_val_score, learning_curve, StratifiedKFold
+from sklearn.preprocessing import LabelEncoder, StandardScaler
+from sklearn.naive_bayes import GaussianNB
+from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
+from sklearn.utils.class_weight import compute_class_weight
+
+
+# Function to load and preprocess data
+def load_and_preprocess_data(filename):
+    df = pd.read_csv(filename)
+    df.dropna(inplace=True)  # Remove missing values
+
+    df['password_length'] = df['password'].apply(len)
+    df['n_uppercase'] = df['password'].str.count(r'[A-Z]')
+    df['n_lowercase'] = df['password'].str.count(r'[a-z]')
+    df['n_digits'] = df['password'].str.count(r'[0-9]')
+    df['n_special'] = df['password'].str.count(r'[^A-Za-z0-9]')
+    df['n_unique'] = df['password'].apply(lambda x: len(set(x)))
+#    df['entropy'] = df['password'].apply(password_entropy)
+#    df['has_sequential_pattern'] = df['password'].apply(has_sequential_pattern)
+
+    # Assign "Weak" strength (0) if password length is less than 4
+    df.loc[df['password_length'] < 4, 'strength'] = 0  
+
+    # Encode strength labels
+    label_encoder = LabelEncoder()
+    df['strength'] = label_encoder.fit_transform(df['strength'])
+    
+    return df
+
+
+# Function to split dataset into training and testing sets
+def split_data(df):
+    X = df[['password_length', 'n_uppercase', 'n_lowercase', 'n_digits', 'n_special', 'n_unique']]
+    
+    y = df['strength']  # Target variable
+    return train_test_split(X, y, test_size=0.3, random_state=42, stratify=y)
+
+def scale_features(X_train, X_test): # since y values are categorical, we don't scale them
+    scaler = StandardScaler() 
+    X_train_scaled = scaler.fit_transform(X_train)
+    X_test_scaled = scaler.transform(X_test)
+    
+    # Save the scaler for later use
+    joblib.dump(scaler, "scaler.pkl")
+
+    return X_train_scaled, X_test_scaled
+
+# Function to train a Naive Bayes model with class weights
+def train_naive_bayes(X_train, y_train, class_weights=None):
+    model = GaussianNB()
+
+    if class_weights:  # Only apply weights if they exist
+        sample_weights = [class_weights[label] for label in y_train]
+        model.fit(X_train, y_train, sample_weight=sample_weights)
+    else:
+        model.fit(X_train, y_train)  # Train without weights
+
+    # Save the trained model
+    with open("naive_bayes_model.pkl", "wb") as file:
+        pickle.dump(model, file)
+
+    return model
+
+# Function to evaluate model performance
+def evaluate_model(model, X_test, y_test, title="Evaluation Results", save_fig=False):
+    y_pred = model.predict(X_test)
+    accuracy = accuracy_score(y_test, y_pred)
+    
+    print(f"\n{title}")
+    print("Accuracy:", accuracy)
+    print("Classification Report:\n", classification_report(y_test, y_pred))
+
+    # Confusion Matrix Plot
+    plt.figure(figsize=(6,5))
+    sns.heatmap(confusion_matrix(y_test, y_pred), annot=True, cmap="Blues", fmt="d")
+    plt.xlabel('Predicted')
+    plt.ylabel('Actual')
+    plt.title(f'Confusion Matrix - {title}')
+    
+    if save_fig:
+        plt.savefig(f"{title.replace(' ', '_')}.png")  # Save confusion matrix figure
+    
+    plt.show()
+
+
+# Function to balance data using class weights instead of SMOTE
+def balance_data(X_train, y_train):
+    # Compute class weights for balanced training
+    class_weights = compute_class_weight(class_weight="balanced", classes=np.unique(y_train), y=y_train)
+    weights_dict = {i: class_weights[i] for i in np.unique(y_train)}
+
+    # Save computed class weights for reference
+    np.save("class_weights.npy", weights_dict)
+
+    return weights_dict
+
+# Function to perform cross-validation
+def perform_cross_validation(X, y, model, n_splits=5):
+    """Perform cross-validation and return detailed metrics"""
+    cv = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=42)
+
+    accuracy_scores = cross_val_score(model, X, y, cv=cv, scoring='accuracy')
+    precision_scores = cross_val_score(model, X, y, cv=cv, scoring='precision_weighted')
+    recall_scores = cross_val_score(model, X, y, cv=cv, scoring='recall_weighted')
+    f1_scores = cross_val_score(model, X, y, cv=cv, scoring='f1_weighted')
+    
+    cv_results = {
+        'Accuracy': {
+            'Mean': accuracy_scores.mean(),
+            'Std': accuracy_scores.std(),
+            'Scores': accuracy_scores
+        },
+        'Precision': {
+            'Mean': precision_scores.mean(),
+            'Std': precision_scores.std(),
+            'Scores': precision_scores
+        },
+        'Recall': {
+            'Mean': recall_scores.mean(),
+            'Std': recall_scores.std(),
+            'Scores': recall_scores
+        },
+        'F1': {
+            'Mean': f1_scores.mean(),
+            'Std': f1_scores.std(),
+            'Scores': f1_scores
+        }
+    }
+    
+    return cv_results
+
+
+
+def plot_learning_curve(model, X, y):
+    train_sizes, train_scores, test_scores = learning_curve(model, X, y, cv=5, scoring="accuracy")
+    
+    train_mean = np.mean(train_scores, axis=1)
+    test_mean = np.mean(test_scores, axis=1)
+
+    plt.plot(train_sizes, train_mean, 'o--', label="Training Accuracy", color='blue')
+    plt.plot(train_sizes, test_mean, 's-', label="Validation Accuracy", color='orange')
+    
+    plt.xlabel("Training Size")
+    plt.ylabel("Accuracy")
+    plt.title("Learning Curve")
+    plt.legend()
+    plt.grid()
+    plt.show()
+
+
+
+# Function to test custom passwords with an added condition for length < 4
+def custom_password_test(model, passwords, strength_labels):
+    # Create DataFrame from passwords
+    df = pd.DataFrame({'password': passwords})
+
+    # Extract features
+    df['password_length'] = df['password'].apply(len)
+    df['n_uppercase'] = df['password'].str.count(r'[A-Z]')
+    df['n_lowercase'] = df['password'].str.count(r'[a-z]')
+    df['n_digits'] = df['password'].str.count(r'[0-9]')
+    df['n_special'] = df['password'].str.count(r'[^A-Za-z0-9]')
+    df['n_unique'] = df['password'].apply(lambda x: len(set(x)))
+#    df['entropy'] = df['password'].apply(password_entropy)
+#    df['has_sequential_pattern'] = df['password'].apply(has_sequential_pattern)
+
+    # Define feature columns
+    feature_columns = ['password_length', 'n_uppercase', 'n_lowercase', 'n_digits', 'n_special', 'n_unique']
+
+    # Apply condition: If password length < 4, classify as Weak (0) directly
+    df['Predicted Strength'] = df['password_length'].apply(lambda x: 0 if x < 4 else -1) #if length less than 4(0), else (-1)
+
+    # Load the saved scaler and apply transformation
+    scaler = joblib.load("scaler.pkl")
+    df_scaled = scaler.transform(df[feature_columns]) #scaled feature matrix: Apply normalization[X=(x-μ)/σ]) to feature values - all will be in same range to prevent bias toward larger values
+
+    # Get predictions and probabilities only for passwords not already marked as Weak (meaning, -1)
+    mask = df['Predicted Strength'] == -1
+    y_probs = model.predict_proba(df_scaled[mask]) #df_scaled[mask] → Subset of features needing classification =>generates the probability of each password belonging to each strength class
+
+    # Define decision thresholds (needed to promote minority classes)
+    threshold_weak = 0.25
+    threshold_strong = 0.60 #If Strong passwords are rare, we may require a higher probability (> 60%) to avoid false positives.
+
+    # Adjust predictions based on probability thresholds
+    y_pred_adjusted = []
+    for probs in y_probs:
+        if probs[0] > threshold_weak:
+            y_pred_adjusted.append(0)  # Weak
+        elif probs[2] > threshold_strong:
+            y_pred_adjusted.append(2)  # Strong
+        else:
+            y_pred_adjusted.append(1)  # Medium
+
+    # Assign adjusted predictions back to the DataFrame
+    df.loc[mask, 'Predicted Strength'] = y_pred_adjusted
+
+    # Convert numeric predictions to labels
+    df['Predicted Strength'] = df['Predicted Strength'].map(strength_labels)
+
+    return df[['password', 'Predicted Strength']]
+
+
+def main():
+    # Load and preprocess data
+    print('\n', "Loading and preprocessing dataset")
+    df = load_and_preprocess_data("dataset_reformed_combined.csv")
+
+    # Split data into training and testing sets
+    print('\n', "Splitting data into training and testing sets")
+    X_train, X_test, y_train, y_test = split_data(df)
+
+    # Scale features
+    print('\n', "Scaling features")
+    X_train_scaled, X_test_scaled = scale_features(X_train, X_test)
+
+
+
+    # Train and evaluate model on IMBALANCED dataset
+    print('\n', "Training and evaluating the model on IMBALANCED dataset")
+    imbalanced_model = train_naive_bayes(X_train_scaled, y_train)
+    evaluate_model(imbalanced_model, X_test_scaled, y_test, "Confusion Matrix of Imbalanced Data", save_fig=True)
+    
+    # Feature Importance Analysis
+    print('\n', "Feature Importance Analysis")
+    print(pd.DataFrame(imbalanced_model.theta_, columns=X_train.columns))
+
+    # Plot learning curve on imbalanced model
+    print('\n', "Plot learning curve on imbalanced model")
+    plot_learning_curve(imbalanced_model, X_train_scaled, y_train)
+
+    # Perform cross-validation on imbalanced data
+    print('\n', "Performing cross-validation on imbalanced data")
+    cv_imb_results = perform_cross_validation(X_train_scaled, y_train, imbalanced_model, n_splits=5)
+    for metric, values in cv_imb_results.items():
+        print(f"{metric}: Mean={values['Mean']:.4f}, ' ', Std={values['Std']:.4f}, ' ', Scores={values['Scores']}")
+
+    # SAVE imbalanced model
+    print('\n', "SAVING imbalanced model")
+    joblib.dump(imbalanced_model, 'imbalanced_model.joblib')
+
+    # CUSTOM Passwords Test using IMBALANCED model
+    print('\n', "Custome PASSWORDS Test using IMBALANCED model")
+    passwords_lst = ['P@ssw0rd123!', '123456Aa!', '1111111111AAA!!!', 'O0OoOo0O0O', 'passsssssssss', 'Welcome2MySite!', 'aB3!', 'a']
+    strength_labels_dic = {0: 'Weak', 1: 'Medium', 2: 'Strong'}
+    imbalanced_results = custom_password_test(imbalanced_model, passwords_lst, strength_labels_dic)
+    print(imbalanced_results)   
+
+
+
+    # Number of values in each class (IMBALANCED)
+    print("Original class distribution:\n", y_train.value_counts())
+
+    # BALANCE data using SMOTE
+    print("Computing class weights")
+    class_weights = balance_data(X_train_scaled, y_train)
+
+    # Number of values in each class (BALANCED)
+    print("Balanced class distribution:\n", class_weights)
+
+    # Train and evaluate model on balanced data
+    print('\n', "Training and evaluating model on balanced data")
+    balanced_model = train_naive_bayes(X_train_scaled, y_train, class_weights)
+    evaluate_model(balanced_model, X_test_scaled, y_test, "Confusion Matrix of Balanced Data (SMOTE)", save_fig=True)
+
+    # Plot learning curve on balanced model
+    print('\n', "Plot learning curve on balanced model")
+    plot_learning_curve(balanced_model, X_train_scaled, y_train)
+
+    # Perform cross-validation on balanced data
+    print('\n', "Perform cross-validation on balanced data")
+    cv_bal_results = perform_cross_validation(X_train_scaled, y_train, balanced_model, n_splits=5)    
+    for metric, values in cv_bal_results.items():
+        print(f"{metric}: Mean={values['Mean']:.4f}, ' ', Std={values['Std']:.4f}, ' ', Scores={values['Scores']}")
+
+    # SAVE balanced model
+    print('\n', "SAVING balanced model")
+    joblib.dump(balanced_model, 'balanced_model.joblib')
+
+    # CUSTOM Passwords Test using BALANCED model
+    print('\n', "CUSTOM Passwords Test using BALANCED model")
+    balanced_results = custom_password_test(balanced_model, passwords_lst, strength_labels_dic)
+    print(balanced_results)   
+
+
+
+# Run the script
+if __name__ == "__main__":
+    main()
