@@ -1,0 +1,16 @@
+Test Set Metrics:
+Accuracy: 0.947
+Precision: 0.9508416180307824
+Recall: 0.947
+
+Classification Report:
+               precision    recall  f1-score   support
+
+      Medium       0.88      0.97      0.92      1597
+      Strong       0.97      0.95      0.96      1660
+        Weak       1.00      0.93      0.96      1743
+
+    accuracy                           0.95      5000
+   macro avg       0.95      0.95      0.95      5000
+weighted avg       0.95      0.95      0.95      5000
+
