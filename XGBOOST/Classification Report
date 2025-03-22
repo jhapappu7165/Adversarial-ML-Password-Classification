@@ -1,0 +1,31 @@
+Validation Metrics:
+Accuracy: 0.948
+Precision: 0.9514386241251652
+Recall: 0.948
+
+Classification Report:
+               precision    recall  f1-score   support
+
+           0       0.88      0.97      0.92      1597
+           1       0.97      0.94      0.96      1660
+           2       1.00      0.93      0.97      1743
+
+    accuracy                           0.95      5000
+   macro avg       0.95      0.95      0.95      5000
+weighted avg       0.95      0.95      0.95      5000
+
+Test Metrics:
+Accuracy: 0.9468
+Precision: 0.9506206984447104
+Recall: 0.9468
+
+Classification Report:
+               precision    recall  f1-score   support
+
+           0       0.88      0.97      0.92      1597
+           1       0.97      0.95      0.96      1660
+           2       1.00      0.93      0.96      1743
+
+    accuracy                           0.95      5000
+   macro avg       0.95      0.95      0.95      5000
+weighted avg       0.95      0.95      0.95      5000
