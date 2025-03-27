@@ -1,4 +1,4 @@
-PS D:\OneDrive\Desktop\ML Research@Dr. Rahimi\Model 3. Naive Bayes> & "D:/OneDrive/Desktop/ML Research@Dr. Rahimi/Model 3. Naive Bayes/venv/Scripts/python.exe" "d:/OneDrive/Desktop/ML Research@Dr. Rahimi/Model 3. Naive Bayes/ML_Naive_Bayes(Final).py"
+  df = load_and_preprocess_data("D:\OneDrive\Desktop\Adversarial-ML-Password-Classification\Model_3_Naive_Bayes\dataset_reformed_combined.csv")
 
  Loading and preprocessing dataset
 
@@ -8,7 +8,7 @@ PS D:\OneDrive\Desktop\ML Research@Dr. Rahimi\Model 3. Naive Bayes> & "D:/OneDri
 
  Training and evaluating the model on IMBALANCED dataset
 
-Confusion Matrix of Imbalanced Data
+IMBALANCED DATASET - Confusion Matrix
 Accuracy: 0.9706761643726589
 Classification Report:
                precision    recall  f1-score   support
@@ -30,11 +30,20 @@ weighted avg       0.97      0.97      0.97    201031
 
  Plot learning curve on imbalanced model
 
- Performing cross-validation on imbalanced data
+ Performing Cross-Validation on Imbalanced Dataset
 Accuracy: Mean=0.9700, ' ', Std=0.0005, ' ', Scores=[0.96979161 0.97015403 0.9706014  0.96913041 0.97014305]
 Precision: Mean=0.9714, ' ', Std=0.0004, ' ', Scores=[0.97132363 0.97155784 0.97187371 0.97074696 0.97151121]
 Recall: Mean=0.9700, ' ', Std=0.0005, ' ', Scores=[0.96979161 0.97015403 0.9706014  0.96913041 0.97014305]
 F1: Mean=0.9704, ' ', Std=0.0005, ' ', Scores=[0.97021585 0.9705483  0.97096152 0.96957315 0.97052583]
+Unique classes in y_test: [0 1 2]
+D:\OneDrive\Desktop\Adversarial-ML-Password-Classification\venv\Lib\site-packages\sklearn\utils\validation.py:2732: UserWarning: X has feature names, but GaussianNB was fitted without feature names
+  warnings.warn(
+D:\OneDrive\Desktop\Adversarial-ML-Password-Classification\venv\Lib\site-packages\sklearn\metrics\_classification.py:1565: UndefinedMetricWarning: Precision is ill-defined and being set to 0.0 in labels with no predicted samples. Use `zero_division` parameter to control this behavior.
+  _warn_prf(average, modifier, f"{metric.capitalize()} is", len(result))
+D:\OneDrive\Desktop\Adversarial-ML-Password-Classification\venv\Lib\site-packages\sklearn\metrics\_classification.py:1565: UndefinedMetricWarning: Precision is ill-defined and being set to 0.0 in labels with no predicted samples. Use `zero_division` parameter to control this behavior.
+  _warn_prf(average, modifier, f"{metric.capitalize()} is", len(result))
+D:\OneDrive\Desktop\Adversarial-ML-Password-Classification\venv\Lib\site-packages\sklearn\metrics\_classification.py:1565: UndefinedMetricWarning: Precision is ill-defined and being set to 0.0 in labels with no predicted samples. Use `zero_division` parameter to control this behavior.
+  _warn_prf(average, modifier, f"{metric.capitalize()} is", len(result))
 
  SAVING imbalanced model
 
@@ -60,7 +69,7 @@ Balanced class distribution:
 
  Training and evaluating model on balanced data
 
-Confusion Matrix of Balanced Data (SMOTE)
+ BALANCED DATASET - Confusion Matrix
 Accuracy: 0.9393078679407654
 Classification Report:
                precision    recall  f1-score   support
@@ -81,6 +90,14 @@ Accuracy: Mean=0.9700, ' ', Std=0.0005, ' ', Scores=[0.96979161 0.97015403 0.970
 Precision: Mean=0.9714, ' ', Std=0.0004, ' ', Scores=[0.97132363 0.97155784 0.97187371 0.97074696 0.97151121]
 Recall: Mean=0.9700, ' ', Std=0.0005, ' ', Scores=[0.96979161 0.97015403 0.9706014  0.96913041 0.97014305]
 F1: Mean=0.9704, ' ', Std=0.0005, ' ', Scores=[0.97021585 0.9705483  0.97096152 0.96957315 0.97052583]
+D:\OneDrive\Desktop\Adversarial-ML-Password-Classification\venv\Lib\site-packages\sklearn\utils\validation.py:2732: UserWarning: X has feature names, but GaussianNB was fitted without feature names
+  warnings.warn(
+D:\OneDrive\Desktop\Adversarial-ML-Password-Classification\venv\Lib\site-packages\sklearn\metrics\_classification.py:1565: UndefinedMetricWarning: Precision is ill-defined and being set to 0.0 in labels with no predicted samples. Use `zero_division` parameter to control this behavior.
+  _warn_prf(average, modifier, f"{metric.capitalize()} is", len(result))
+D:\OneDrive\Desktop\Adversarial-ML-Password-Classification\venv\Lib\site-packages\sklearn\metrics\_classification.py:1565: UndefinedMetricWarning: Precision is ill-defined and being set to 0.0 in labels with no predicted samples. Use `zero_division` parameter to control this behavior.
+  _warn_prf(average, modifier, f"{metric.capitalize()} is", len(result))
+D:\OneDrive\Desktop\Adversarial-ML-Password-Classification\venv\Lib\site-packages\sklearn\metrics\_classification.py:1565: UndefinedMetricWarning: Precision is ill-defined and being set to 0.0 in labels with no predicted samples. Use `zero_division` parameter to control this behavior.
+  _warn_prf(average, modifier, f"{metric.capitalize()} is", len(result))
 
  SAVING balanced model
 
@@ -94,4 +111,3 @@ F1: Mean=0.9704, ' ', Std=0.0005, ' ', Scores=[0.97021585 0.9705483  0.97096152 
 5   Welcome2MySite!             Medium
 6              aB3!             Medium
 7                 a               Weak
-PS D:\OneDrive\Desktop\ML Research@Dr. Rahimi\Model 3. Naive Bayes> 
