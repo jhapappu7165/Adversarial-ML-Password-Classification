@@ -1,6 +1,6 @@
 ### Adversarial Machine Learning for Robust Password Strength Estimation
 Authors: Pappu Jha, Hanzla Hamid
 
-Faculty: Dr. Nick Rahimi
+Advisor: [Dr. Nick Rahimi](https://sites.google.com/view/nickrahimi/home)
 
-Mentors: Mr. Ashim Dahal, Mr. Oluseyi Olukola
+Mentors:  Mr. Oluseyi Olukola, [Mr. Ashim Dahal](https://ashimdahal.github.io)
