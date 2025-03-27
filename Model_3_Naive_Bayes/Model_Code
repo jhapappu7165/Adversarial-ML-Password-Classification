@@ -1,4 +1,3 @@
-# normalize confusion matrix so that diagonal will be dark 
 import pandas as pd
 import numpy as np
 import seaborn as sns
@@ -27,8 +26,6 @@ def load_and_preprocess_data(filename):
     df['n_digits'] = df['password'].str.count(r'[0-9]')
     df['n_special'] = df['password'].str.count(r'[^A-Za-z0-9]')
     df['n_unique'] = df['password'].apply(lambda x: len(set(x)))
-#    df['entropy'] = df['password'].apply(password_entropy)
-#    df['has_sequential_pattern'] = df['password'].apply(has_sequential_pattern)
 
     # Assign "Weak" strength (0) if password length is less than 4
     df.loc[df['password_length'] < 4, 'strength'] = 0  
@@ -87,8 +84,8 @@ def evaluate_model(model, X_test, y_test, title="Evaluation Results", save_fig=F
     sns.heatmap(confusion_matrix(y_test, y_pred), annot=True, cmap="Blues", fmt="d")
     plt.xlabel('Predicted')
     plt.ylabel('Actual')
-    plt.title(f'Confusion Matrix - {title}')
-    
+    plt.title(f'{title}')
+
     if save_fig:
         plt.savefig(f"{title.replace(' ', '_')}.png")  # Save confusion matrix figure
     
@@ -143,7 +140,7 @@ def perform_cross_validation(X, y, model, n_splits=5):
 
 
 
-def plot_learning_curve(model, X, y):
+def plot_learning_curve(model, X, y, title):
     train_sizes, train_scores, test_scores = learning_curve(model, X, y, cv=5, scoring="accuracy")
     
     train_mean = np.mean(train_scores, axis=1)
@@ -154,11 +151,41 @@ def plot_learning_curve(model, X, y):
     
     plt.xlabel("Training Size")
     plt.ylabel("Accuracy")
-    plt.title("Learning Curve")
+    plt.title(f"{title} - Learning Curve")
     plt.legend()
     plt.grid()
     plt.show()
 
+
+# use x_test and y_test to evaluate the model's performance
+def plot_bar_graph(model, X_test, y_test, model_name):
+    # Get Predictions
+    y_pred = model.predict(X_test)
+    
+    # Generate Classification Report as Dictionary with Explicit Labels
+    report = classification_report(y_test, y_pred, output_dict=True, labels=[0, 1, 2])
+
+    # Convert to DataFrame
+    report_df = pd.DataFrame(report).T
+
+    # Ensure all expected classes are present
+    for label in [0, 1, 2]:
+        if str(label) not in report_df.index:
+            report_df.loc[str(label)] = {'precision': 0.0, 'recall': 0.0, 'f1-score': 0.0, 'support': 0}
+
+    # Convert index to string for consistent access
+    report_df.index = report_df.index.astype(str)
+
+    # Drop 'support' column
+    report_df = report_df.drop(columns=['support'], errors='ignore')
+
+    # Plot Bar Chart including accuracy
+    report_df.plot(kind="bar", figsize=(10, 6))
+    plt.title(f'{model_name} - BAR GRAPH of Classification Report')
+    plt.xlabel("Classes")
+    plt.ylabel("Score")
+    plt.legend(loc="lower right")
+    plt.show()
 
 
 # Function to test custom passwords with an added condition for length < 4
@@ -173,8 +200,6 @@ def custom_password_test(model, passwords, strength_labels):
     df['n_digits'] = df['password'].str.count(r'[0-9]')
     df['n_special'] = df['password'].str.count(r'[^A-Za-z0-9]')
     df['n_unique'] = df['password'].apply(lambda x: len(set(x)))
-#    df['entropy'] = df['password'].apply(password_entropy)
-#    df['has_sequential_pattern'] = df['password'].apply(has_sequential_pattern)
 
     # Define feature columns
     feature_columns = ['password_length', 'n_uppercase', 'n_lowercase', 'n_digits', 'n_special', 'n_unique']
@@ -213,10 +238,12 @@ def custom_password_test(model, passwords, strength_labels):
     return df[['password', 'Predicted Strength']]
 
 
+
+
 def main():
     # Load and preprocess data
     print('\n', "Loading and preprocessing dataset")
-    df = load_and_preprocess_data("dataset_reformed_combined.csv")
+    df = load_and_preprocess_data("D:\OneDrive\Desktop\Adversarial-ML-Password-Classification\Model_3_Naive_Bayes\dataset_reformed_combined.csv")
 
     # Split data into training and testing sets
     print('\n', "Splitting data into training and testing sets")
@@ -231,7 +258,7 @@ def main():
     # Train and evaluate model on IMBALANCED dataset
     print('\n', "Training and evaluating the model on IMBALANCED dataset")
     imbalanced_model = train_naive_bayes(X_train_scaled, y_train)
-    evaluate_model(imbalanced_model, X_test_scaled, y_test, "Confusion Matrix of Imbalanced Data", save_fig=True)
+    evaluate_model(imbalanced_model, X_test_scaled, y_test, "IMBALANCED DATASET - Confusion Matrix", save_fig=True)
     
     # Feature Importance Analysis
     print('\n', "Feature Importance Analysis")
@@ -239,17 +266,23 @@ def main():
 
     # Plot learning curve on imbalanced model
     print('\n', "Plot learning curve on imbalanced model")
-    plot_learning_curve(imbalanced_model, X_train_scaled, y_train)
+    plot_learning_curve(imbalanced_model, X_train_scaled, y_train, "IMBALANCED MODEL")
 
     # Perform cross-validation on imbalanced data
-    print('\n', "Performing cross-validation on imbalanced data")
+    print('\n', "Performing Cross-Validation on Imbalanced Dataset")
     cv_imb_results = perform_cross_validation(X_train_scaled, y_train, imbalanced_model, n_splits=5)
     for metric, values in cv_imb_results.items():
         print(f"{metric}: Mean={values['Mean']:.4f}, ' ', Std={values['Std']:.4f}, ' ', Scores={values['Scores']}")
 
+
+    print("Unique classes in y_test:", np.unique(y_test))
+
+    # Plot bar graph for Imbalanced Model
+    plot_bar_graph(imbalanced_model, X_test, y_test, "IMBALANCED MODEL")
+
     # SAVE imbalanced model
     print('\n', "SAVING imbalanced model")
-    joblib.dump(imbalanced_model, 'imbalanced_model.joblib')
+    joblib.dump(imbalanced_model, 'Imbalanced_Model.joblib')
 
     # CUSTOM Passwords Test using IMBALANCED model
     print('\n', "Custome PASSWORDS Test using IMBALANCED model")
@@ -257,6 +290,8 @@ def main():
     strength_labels_dic = {0: 'Weak', 1: 'Medium', 2: 'Strong'}
     imbalanced_results = custom_password_test(imbalanced_model, passwords_lst, strength_labels_dic)
     print(imbalanced_results)   
+
+
 
 
 
@@ -273,11 +308,11 @@ def main():
     # Train and evaluate model on balanced data
     print('\n', "Training and evaluating model on balanced data")
     balanced_model = train_naive_bayes(X_train_scaled, y_train, class_weights)
-    evaluate_model(balanced_model, X_test_scaled, y_test, "Confusion Matrix of Balanced Data (SMOTE)", save_fig=True)
+    evaluate_model(balanced_model, X_test_scaled, y_test, " BALANCED DATASET - Confusion Matrix", save_fig=True)
 
     # Plot learning curve on balanced model
     print('\n', "Plot learning curve on balanced model")
-    plot_learning_curve(balanced_model, X_train_scaled, y_train)
+    plot_learning_curve(balanced_model, X_train_scaled, y_train, "BALANCED MODEL")
 
     # Perform cross-validation on balanced data
     print('\n', "Perform cross-validation on balanced data")
@@ -285,9 +320,12 @@ def main():
     for metric, values in cv_bal_results.items():
         print(f"{metric}: Mean={values['Mean']:.4f}, ' ', Std={values['Std']:.4f}, ' ', Scores={values['Scores']}")
 
+    # Plot BAR GRAPH for Balanced Model
+    plot_bar_graph(balanced_model, X_test, y_test, "BALANCED MODEL")
+
     # SAVE balanced model
     print('\n', "SAVING balanced model")
-    joblib.dump(balanced_model, 'balanced_model.joblib')
+    joblib.dump(balanced_model, 'Balanced_Model.joblib')
 
     # CUSTOM Passwords Test using BALANCED model
     print('\n', "CUSTOM Passwords Test using BALANCED model")
