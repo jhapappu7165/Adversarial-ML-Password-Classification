@@ -1,6 +1,6 @@
 # 🔐 Adversarial Machine Learning for Password Strength Classification
 
-Authors: [Pappu Jha](jhapappu.com.np), Hanzla Hamid
+Authors: [Pappu Jha](https://jhapappu.com.np), Hanzla Hamid
 
 Advisor: [Dr. Nick Rahimi](https://sites.google.com/view/nickrahimi/home)
 
