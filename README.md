@@ -6,6 +6,8 @@ Advisor: [Dr. Nick Rahimi](https://sites.google.com/view/nickrahimi/home)
 
 Mentors:  Mr. Oluseyi Olukola, [Mr. Ashim Dahal](https://ashimdahal.github.io)
 
+Link to the Paper: [Click Here](https://arxiv.org/abs/2506.00373)
+
 This repository contains the code and resources used in our research on improving password strength estimation using adversarial machine learning techniques. The goal of the project is to develop robust models that can accurately classify passwords as weak, medium, or strong—even when they exhibit deceptive or adversarial patterns.
 
 ---
